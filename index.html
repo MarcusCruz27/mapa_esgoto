@@ -9,6 +9,15 @@
     <style>
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; }
         #map { height: 100%; width: 100%; }
+        
+        .leaflet-control-locate {
+            background-color: white;
+            padding: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+        }
     </style>
 </head>
 <body>
@@ -16,25 +25,67 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Centraliza o mapa em Macapá-AP
+        // Centraliza o mapa inicialmente em Macapá-AP
         var map = L.map('map').setView([0.0355, -51.0705], 13);
 
-        // Camada de Satélite de fundo
+        // Camada de Satélite de fundo (Google Maps)
         L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
             maxZoom: 20,
             subdomains: ['mt0','mt1','mt2','mt3']
         }).addTo(map);
 
-        // Função para carregar o seu arquivo de rede de esgoto
-        fetch('rede_esgoto.geojson')
-            .then(response => response.json())
-            .then(data => {
-                L.geoJSON(data, {
-                    style: function (feature) {
-                        return { color: "#ff0000", weight: 3 }; // Linhas vermelhas para a rede
-                    }
-                }).addTo(map);
-            });
+        // --- FUNÇÃO PARA CARREGAR OS 7 ARQUIVOS INDIVIDUAIS ---
+        
+        function carregarRede(arquivo, corHex) {
+            fetch(arquivo)
+                .then(response => {
+                    if (!response.ok) throw new Error("Erro ao carregar " + arquivo);
+                    return response.json();
+                })
+                .then(data => {
+                    L.geoJSON(data, {
+                        style: {
+                            color: corHex, // Cor específica para cada rede
+                            weight: 3,
+                            opacity: 0.9
+                        }
+                    }).addTo(map);
+                })
+                .catch(error => console.log("Aviso:", error));
+        }
+
+        // Carregando cada arquivo com uma cor diferente (personalizável)
+        carregarRede('eee1.geojson', '#ff4d4d');         // Vermelho
+        carregarRede('eee2.geojson', '#3388ff');         // Azul
+        carregarRede('eee3.geojson', '#ffcc00');         // Amarelo
+        carregarRede('eee7.geojson', '#00ffcc');         // Ciano/Verde-água
+        carregarRede('laguinho.geojson', '#ff3399');     // Rosa
+        carregarRede('nelsondosanjos.geojson', '#9933ff'); // Roxo
+        carregarRede('pedrinhas.geojson', '#33cc33');    // Verde
+
+        // --- GPS / LOCALIZAÇÃO DO USUÁRIO ---
+        map.locate({setView: true, maxZoom: 16, watch: true, enableHighAccuracy: true});
+
+        var markerLocal, circleLocal;
+
+        function onLocationFound(e) {
+            var radius = e.accuracy / 2;
+            if (markerLocal) {
+                markerLocal.setLatLng(e.latlng);
+                circleLocal.setLatLng(e.latlng);
+                circleLocal.setRadius(radius);
+            } else {
+                markerLocal = L.marker(e.latlng).addTo(map)
+                    .bindPopup("<b>Você está aqui</b>").openPopup();
+                circleLocal = L.circle(e.latlng, radius).addTo(map);
+            }
+        }
+        map.on('locationfound', onLocationFound);
+
+        function onLocationError(e) {
+            alert("Não foi possível acessar sua localização via GPS.");
+        }
+        map.on('locationerror', onLocationError);
     </script>
 </body>
 </html>
