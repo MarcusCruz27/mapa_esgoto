@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Rede de Esgoto - Macapá</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Biblioteca de Mapas Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; }
+        #map { height: 100%; width: 100%; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Centraliza o mapa em Macapá-AP
+        var map = L.map('map').setView([0.0355, -51.0705], 13);
+
+        // Camada de Satélite de fundo
+        L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0','mt1','mt2','mt3']
+        }).addTo(map);
+
+        // Função para carregar o seu arquivo de rede de esgoto
+        fetch('rede_esgoto.geojson')
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: function (feature) {
+                        return { color: "#ff0000", weight: 3 }; // Linhas vermelhas para a rede
+                    }
+                }).addTo(map);
+            });
+    </script>
+</body>
+</html>
