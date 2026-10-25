@@ -29,39 +29,59 @@
         var map = L.map('map').setView([0.0355, -51.0705], 13);
 
         // Camada de Satélite de fundo (Google Maps)
-        L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+        var satelite = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
             maxZoom: 20,
             subdomains: ['mt0','mt1','mt2','mt3']
         }).addTo(map);
 
-        // --- FUNÇÃO PARA CARREGAR OS 7 ARQUIVOS INDIVIDUAIS ---
-        
-        function carregarRede(arquivo, corHex) {
+        // Objeto que vai armazenar as camadas para o controle do painel lateral
+        var overlayLayers = {};
+
+        // Variável de controle para sabermos quando todas as 7 redes terminaram de carregar
+        var arquivosCarregados = 0;
+        var controlLayers = null;
+
+        function adicionarCamadaAoPainel(nomeAmigavel, camadaGeoJSON) {
+            overlayLayers[nomeAmigavel] = camadaGeoJSON;
+            arquivosCarregados++;
+
+            // Quando o último arquivo carregar, adiciona o painel de controle no mapa
+            if (arquivosCarregados === 7 && !controlLayers) {
+                controlLayers = L.control.layers(null, overlayLayers, {collapsed: false}).addTo(map);
+            }
+        }
+
+        function carregarRede(arquivo, nomeCamada, corHex) {
             fetch(arquivo)
                 .then(response => {
                     if (!response.ok) throw new Error("Erro ao carregar " + arquivo);
                     return response.json();
                 })
                 .then(data => {
-                    L.geoJSON(data, {
+                    var camada = L.geoJSON(data, {
                         style: {
-                            color: corHex, // Cor específica para cada rede
+                            color: corHex,
                             weight: 3,
                             opacity: 0.9
                         }
-                    }).addTo(map);
+                    }).addTo(map); // Já inicia visível no mapa
+
+                    adicionarCamadaAoPainel(nomeCamada, camada);
                 })
-                .catch(error => console.log("Aviso:", error));
+                .catch(error => {
+                    console.log("Aviso: ", error);
+                    arquivosCarregados++; // Evita travar se algum arquivo falhar
+                });
         }
 
-        // Carregando cada arquivo com uma cor diferente (personalizável)
-        carregarRede('eee1.geojson', '#ff4d4d');         // Vermelho
-        carregarRede('eee2.geojson', '#3388ff');         // Azul
-        carregarRede('eee3.geojson', '#ffcc00');         // Amarelo
-        carregarRede('eee7.geojson', '#00ffcc');         // Ciano/Verde-água
-        carregarRede('laguinho.geojson', '#ff3399');     // Rosa
-        carregarRede('nelsondosanjos.geojson', '#9933ff'); // Roxo
-        carregarRede('pedrinhas.geojson', '#33cc33');    // Verde
+        // Carrega os 7 arquivos com seus respectivos nomes amigáveis e cores
+        carregarRede('eee1.geojson', '🔴 Rede EEE 1', '#ff4d4d');
+        carregarRede('eee2.geojson', '🔵 Rede EEE 2', '#3388ff');
+        carregarRede('eee3.geojson', '🟡 Rede EEE 3', '#ffcc00');
+        carregarRede('eee7.geojson', '🟢 Rede EEE 7', '#00ffcc');
+        carregarRede('laguinho.geojson', '🌸 Rede Laguinho', '#ff3399');
+        carregarRede('nelsondosanjos.geojson', '🟣 Rede Nelson dos Anjos', '#9933ff');
+        carregarRede('pedrinhas.geojson', '🟤 Rede Pedrinhas', '#33cc33');
 
         // --- GPS / LOCALIZAÇÃO DO USUÁRIO ---
         map.locate({setView: true, maxZoom: 16, watch: true, enableHighAccuracy: true});
