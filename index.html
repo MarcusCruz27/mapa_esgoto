@@ -1,111 +1,262 @@
+```html
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
     <meta charset="utf-8">
-    <title>Rede de Esgoto - Macapá</title>
+    <title>Redes de Água e Esgoto - Macapá</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Biblioteca de Mapas Leaflet -->
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; }
-        #map { height: 100%; width: 100%; }
-        
-        .leaflet-control-locate {
-            background-color: white;
-            padding: 5px;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 4px;
-            box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
         }
     </style>
 </head>
 <body>
-    <div id="map"></div>
+<div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        // Centraliza o mapa inicialmente em Macapá-AP
-        var map = L.map('map').setView([0.0355, -51.0705], 13);
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-        // Camada de Satélite de fundo (Google Maps)
-        var satelite = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+<script>
+    // Mapa inicializado em Macapá
+    var map = L.map('map').setView([0.0355, -51.0705], 13);
+
+    // Satélite
+    L.tileLayer(
+        'https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        {
             maxZoom: 20,
-            subdomains: ['mt0','mt1','mt2','mt3']
-        }).addTo(map);
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        }
+    ).addTo(map);
 
-        // Objeto que vai armazenar as camadas para o controle do painel lateral
-        var overlayLayers = {};
+    // Grupos de camadas
+    var esgotoLayers = {};
+    var aguaLayers = {};
 
-        // Variável de controle para sabermos quando todas as 7 redes terminaram de carregar
-        var arquivosCarregados = 0;
-        var controlLayers = null;
+    // Cores exclusivas para cada rede de esgoto
+    var redesEsgoto = [
+        {
+            arquivo: 'eee1.geojson',
+            nome: '🔴 Rede EEE 1',
+            cor: '#ff3333'
+        },
+        {
+            arquivo: 'eee2.geojson',
+            nome: '🟣 Rede EEE 2',
+            cor: '#b347ff'
+        },
+        {
+            arquivo: 'eee3.geojson',
+            nome: '🟡 Rede EEE 3',
+            cor: '#ffd633'
+        },
+        {
+            arquivo: 'eee7.geojson',
+            nome: '🟢 Rede EEE 7',
+            cor: '#00cc66'
+        },
+        {
+            arquivo: 'laguinho.geojson',
+            nome: '🌷 Rede Laguinho',
+            cor: '#ff3399'
+        },
+        {
+            arquivo: 'nelsondosanjos.geojson',
+            nome: '🟠 Rede Nelson dos Anjos',
+            cor: '#ff8c00'
+        },
+        {
+            arquivo: 'pedrinhas.geojson',
+            nome: '🟤 Rede Pedrinhas',
+            cor: '#a66b3f'
+        }
+    ];
 
-        function adicionarCamadaAoPainel(nomeAmigavel, camadaGeoJSON) {
-            overlayLayers[nomeAmigavel] = camadaGeoJSON;
-            arquivosCarregados++;
-
-            // Quando o último arquivo carregar, adiciona o painel de controle no mapa
-            if (arquivosCarregados === 7 && !controlLayers) {
-                controlLayers = L.control.layers(null, overlayLayers, {collapsed: false}).addTo(map);
-            }
+    // Redes de água: todas em azul-claro
+    // Ajuste os nomes dos arquivos para corresponder aos do repositório.
+    var redesAgua = [
+        {
+            arquivo: 'Rede_agua_Macapa_otimizado.geojson',
+            nome: '💧 Rede de Água - Macapá',
+            inicial: true
+        },
+        {
+            arquivo: 'Rede_agua_Santana.geojson',
+            nome: '💧 Rede de Água - Santana',
+            inicial: true
         }
 
-        function carregarRede(arquivo, nomeCamada, corHex) {
-            fetch(arquivo)
-                .then(response => {
-                    if (!response.ok) throw new Error("Erro ao carregar " + arquivo);
-                    return response.json();
-                })
-                .then(data => {
-                    var camada = L.geoJSON(data, {
-                        style: {
-                            color: corHex,
-                            weight: 3,
-                            opacity: 0.9
-                        }
-                    }).addTo(map); // Já inicia visível no mapa
+        // Acrescente outras redes de água aqui.
+        // Exemplo:
+        // {
+        //     arquivo: 'Rede_agua_Amapa.geojson',
+        //     nome: '💧 Rede de Água - Amapá',
+        //     inicial: false
+        // }
+    ];
 
-                    adicionarCamadaAoPainel(nomeCamada, camada);
-                })
-                .catch(error => {
-                    console.log("Aviso: ", error);
-                    arquivosCarregados++; // Evita travar se algum arquivo falhar
+    var overlays = {};
+    var totalArquivos = redesEsgoto.length + redesAgua.length;
+    var arquivosProcessados = 0;
+    var controlLayers = null;
+    var boundsInicial = [];
+
+    function finalizarCarregamento() {
+        arquivosProcessados++;
+
+        if (arquivosProcessados === totalArquivos && !controlLayers) {
+            // Organiza as redes de esgoto e água no painel
+            overlays['--- REDES DE ESGOTO ---'] = L.layerGroup();
+            overlays['--- REDES DE ÁGUA ---'] = L.layerGroup();
+
+            redesEsgoto.forEach(function (rede) {
+                if (esgotoLayers[rede.nome]) {
+                    overlays['--- REDES DE ESGOTO ---'].addLayer(
+                        esgotoLayers[rede.nome]
+                    );
+                }
+            });
+
+            redesAgua.forEach(function (rede) {
+                if (aguaLayers[rede.nome]) {
+                    overlays['--- REDES DE ÁGUA ---'].addLayer(
+                        aguaLayers[rede.nome]
+                    );
+                }
+            });
+
+            // Remove grupos vazios do controle
+            if (overlays['--- REDES DE ESGOTO ---'].getLayers().length === 0) {
+                delete overlays['--- REDES DE ESGOTO ---'];
+            }
+
+            if (overlays['--- REDES DE ÁGUA ---'].getLayers().length === 0) {
+                delete overlays['--- REDES DE ÁGUA ---'];
+            }
+
+            // Cria controles individuais com os nomes amigáveis
+            var controleIndividual = {};
+
+            Object.keys(esgotoLayers).forEach(function (nome) {
+                controleIndividual[nome] = esgotoLayers[nome];
+            });
+
+            Object.keys(aguaLayers).forEach(function (nome) {
+                controleIndividual[nome] = aguaLayers[nome];
+            });
+
+            controlLayers = L.control.layers(
+                null,
+                controleIndividual,
+                { collapsed: false }
+            ).addTo(map);
+        }
+    }
+
+    function carregarRedeEsgoto(rede) {
+        fetch(rede.arquivo)
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Erro ao carregar ' + rede.arquivo);
+                }
+                return response.json();
+            })
+            .then(function (data) {
+                var camada = L.geoJSON(data, {
+                    style: {
+                        color: rede.cor,
+                        weight: 3,
+                        opacity: 0.9
+                    }
                 });
+
+                esgotoLayers[rede.nome] = camada;
+
+                // Redes de esgoto começam desativadas
+            })
+            .catch(function (error) {
+                console.error(error);
+            })
+            .finally(finalizarCarregamento);
+    }
+
+    function carregarRedeAgua(rede) {
+        fetch(rede.arquivo)
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Erro ao carregar ' + rede.arquivo);
+                }
+                return response.json();
+            })
+            .then(function (data) {
+                var camada = L.geoJSON(data, {
+                    style: {
+                        color: '#80dfff',
+                        weight: 3,
+                        opacity: 0.95
+                    }
+                });
+
+                aguaLayers[rede.nome] = camada;
+
+                // Só Macapá e Santana começam visíveis
+                if (rede.inicial) {
+                    camada.addTo(map);
+                    boundsInicial.push(camada);
+                }
+            })
+            .catch(function (error) {
+                console.error(error);
+            })
+            .finally(finalizarCarregamento);
+    }
+
+    // Carrega as redes de esgoto
+    redesEsgoto.forEach(carregarRedeEsgoto);
+
+    // Carrega as redes de água
+    redesAgua.forEach(carregarRedeAgua);
+
+    // GPS / localização do usuário
+    var markerLocal, circleLocal;
+
+    map.on('locationfound', function (e) {
+        var radius = e.accuracy / 2;
+
+        if (markerLocal) {
+            markerLocal.setLatLng(e.latlng);
+            circleLocal.setLatLng(e.latlng);
+            circleLocal.setRadius(radius);
+        } else {
+            markerLocal = L.marker(e.latlng)
+                .addTo(map)
+                .bindPopup('<b>Você está aqui</b>');
+
+            circleLocal = L.circle(e.latlng, radius).addTo(map);
         }
+    });
 
-        // Carrega os 7 arquivos com seus respectivos nomes amigáveis e cores
-        carregarRede('eee1.geojson', '🔴 Rede EEE 1', '#ff4d4d');
-        carregarRede('eee2.geojson', '🔵 Rede EEE 2', '#3388ff');
-        carregarRede('eee3.geojson', '🟡 Rede EEE 3', '#ffcc00');
-        carregarRede('eee7.geojson', '🟢 Rede EEE 7', '#00ffcc');
-        carregarRede('laguinho.geojson', '🌸 Rede Laguinho', '#ff3399');
-        carregarRede('nelsondosanjos.geojson', '🟣 Rede Nelson dos Anjos', '#9933ff');
-        carregarRede('pedrinhas.geojson', '🟤 Rede Pedrinhas', '#33cc33');
+    map.on('locationerror', function () {
+        console.warn('Não foi possível acessar sua localização via GPS.');
+    });
 
-        // --- GPS / LOCALIZAÇÃO DO USUÁRIO ---
-        map.locate({setView: true, maxZoom: 16, watch: true, enableHighAccuracy: true});
-
-        var markerLocal, circleLocal;
-
-        function onLocationFound(e) {
-            var radius = e.accuracy / 2;
-            if (markerLocal) {
-                markerLocal.setLatLng(e.latlng);
-                circleLocal.setLatLng(e.latlng);
-                circleLocal.setRadius(radius);
-            } else {
-                markerLocal = L.marker(e.latlng).addTo(map)
-                    .bindPopup("<b>Você está aqui</b>").openPopup();
-                circleLocal = L.circle(e.latlng, radius).addTo(map);
-            }
-        }
-        map.on('locationfound', onLocationFound);
-
-        function onLocationError(e) {
-            alert("Não foi possível acessar sua localização via GPS.");
-        }
-        map.on('locationerror', onLocationError);
-    </script>
+    map.locate({
+        setView: false,
+        watch: true,
+        enableHighAccuracy: true
+    });
+</script>
 </body>
 </html>
+```
